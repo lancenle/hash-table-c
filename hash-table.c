@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
       printf("   [1] Enter new data\n");
       printf("   [2] List table\n");
       printf("   [3] Search data\n");
-      printf("   [4] Delete data (not implemented)\n");
+      printf("   [4] Delete data\n");
       printf("   [5] Quit\n");
       printf("   Choice:  ");
 
@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
             {
                szData[strcspn(szData, "\r\n")] = 0;  /* Strip trailing new line */
 
-               Debug("New data to add: %s\n", szData);
+               Debug("New data to add: [%s]\n", szData);
 
                AddEntryToHashTable(pastrHash, nBucketSize, szData);
             }
@@ -175,22 +175,20 @@ int main(int argc, char *argv[])
             {
                szData[strcspn(szData, "\r\n")] = 0;
 
-               Debug("Data to search: %s\n", szData);
+               Debug("Data to search: [%s]\n", szData);
 
                SearchHashTable(pastrHash, nBucketSize, szData);
             }
             break;
 
          case 4:
-            break;                                   /* Not yet implemented     */
-
             printf("Data to delete:  ");
 
             if (fgets(szData, sizeof(szData), stdin) != NULL)
             {
                szData[strcspn(szData, "\r\n")] = 0;
 
-               Debug("Data to delete: %s\n", szData);
+               Debug("Data to delete: [%s]\n", szData);
 
                DeleteEntryFromHashTable(pastrHash, nBucketSize, szData);
             }
@@ -225,6 +223,8 @@ int main(int argc, char *argv[])
  * Call to:  HashFunction()
  * Overview: Inserts the data into the hash table by finding the appropriate
  *           bucket. If data already exist, do not add.
+ * Notes:    Freeing memory for each linked list chain is done by
+ *           DeleteEntryFromHashTable().
  ********************************************************************************/
 int AddEntryToHashTable(strHashTable *pastrHash, int nSize, const char *pszData)
 {
@@ -241,7 +241,7 @@ int AddEntryToHashTable(strHashTable *pastrHash, int nSize, const char *pszData)
 
    nHashIndex = HashFunction(nSize, pszData);
 
-   Debug("Hash index for %s is %d\n", pszData, nHashIndex);
+   Debug("Hash index for [%s] is bucket [%d]\n", pszData, nHashIndex);
 
 
    /****************************************************************************
@@ -274,6 +274,8 @@ int AddEntryToHashTable(strHashTable *pastrHash, int nSize, const char *pszData)
    /****************************************************************************
     * At this point, pstrCurrent should point to the first link without data.
     * Allocate memory to store create a new linked list chain and store data.
+    *
+    * Freeing linked list chain memory is done by DeleteEntryFromHashTable().
     ****************************************************************************/
    pstrNewChain = (strHashTable *) calloc(1, sizeof(strHashTable));
 
@@ -323,10 +325,88 @@ int AddEntryToHashTable(strHashTable *pastrHash, int nSize, const char *pszData)
  *           traverse the linked list to find the data to delete.
  *           Shift the linked list pointer around the deleted element and free
  *           the memory of deleted record.
+ *           If the data is found in the first chain of the bucket, empty the
+ *           data, but do not free the memory of bucket head.
+ * Notes:    Memory for each linked list chain is done in AddEntryToHashTable().
+ *           The bucket head (first chain in linked list) is not freed.
  ********************************************************************************/
 int DeleteEntryFromHashTable(strHashTable *pastrHash, int nSize, const char *pszData)
 {
-   printf("Delete functionality to be implemented.\n");
+   boolean       bFirstChain  = TRUE;
+   int           nHashIndex   = 0;
+   int           nReturnCode  = 1;
+   strHashTable *pstrCurrent  = NULL;
+   strHashTable *pstrPrevious = NULL;
+
+
+   Debug("Inside DeleteEntryFromHashTable()\n");
+
+
+   nHashIndex = HashFunction(nSize, pszData);
+
+
+   for (pstrCurrent  = &pastrHash[nHashIndex];
+        pstrCurrent != NULL;
+        pstrPrevious = pstrCurrent, pstrCurrent = pstrCurrent->pstrNext)
+   {
+      Debug("Comparing [%s] with [%s]\n", pstrCurrent->szData, pszData);
+
+      if (strcmp(pstrCurrent->szData, pszData) != 0)
+      {
+         bFirstChain = FALSE;
+      }
+      else
+      {
+         Debug("Found [%s] in bucket [%d]\n", pszData, nHashIndex);
+
+
+         /***********************************************************************
+          * If data is found in the bucket head, reset the data, but do not free
+          * any memory.  Each bucket head will always be around.
+          ***********************************************************************/
+         if (bFirstChain == TRUE)
+         {
+            memset(pstrCurrent->szData, 0, sizeof(pstrCurrent->szData));
+         }
+
+         /***********************************************************************
+          * If data is found anywhere in the linked list except the bucket head
+          * (first element of linked list), then rearrange linked list and free
+          * the memory of data found.
+          ***********************************************************************/
+         else
+         {
+            if ((pstrPrevious->pstrNext != NULL) && (pstrCurrent->pstrNext != NULL))
+            {
+               pstrPrevious->pstrNext = pstrCurrent->pstrNext;
+               free(pstrCurrent);
+            }
+            else
+            {
+               pstrPrevious->pstrNext = NULL;
+               free(pstrCurrent);
+            }
+         }
+
+
+         nReturnCode = 0;
+         break;
+      }
+   }
+
+
+   if (nReturnCode == 0)
+   {
+      printf("Data [%s] deleted\n", pszData);
+   }
+   else
+   {
+      printf("Data [%s] not found\n", pszData);
+   }
+
+
+
+   return(nReturnCode);
 }
 
 
@@ -393,7 +473,7 @@ int ListHashTable(const strHashTable *pastrHash, int nSize)
            pstrCurrent != NULL;
            pstrCurrent = pstrCurrent->pstrNext)
       {
-         printf("Bucket[%d] data:  %s\n", nIndex, pstrCurrent->szData);
+         printf("Bucket[%d] data:  [%s]\n", nIndex, pstrCurrent->szData);
          ++nReturnCode;
       }
    }
